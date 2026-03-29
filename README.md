@@ -1,42 +1,45 @@
-# Introduction
+# Abstract
 
-본 프로젝트는 [RetinaFace](https://github.com/biubug6/Pytorch_Retinaface) 코드에 기초를 두고, 위 모델의 비효율적인 정보 흐름과 과도한 메모리 낭비 문제를 해결하는 데에 초점을 맞춥니다. 기존 RetinaFace는 경량 Backbone (MobileNet v1)을 사용 시 성능이 약 13% 급락하며, Multi-Head Loss를 사용하는 과정에서 정보의 효율성이 떨어져 Detection Head에 과도한 메모리가 할당되는 문제가 있습니다.
+This project optimizes the [RetinaFace](https://github.com/biubug6/Pytorch_Retinaface) model for lightweight deployment and enhanced detection performance. By refactoring and decoupling core modules with a MobileNet 0.25 backbone, our proposed model **reduces FLOPs by ~2.6%** while **improving AP by 3.07%** on the WiderFace Hard validation set compared to the baseline.
 
-이러한 문제를 해결하기 위하여 저희는 다음 네 가지 구조를 개편합니다.
-1) ECA-CBAM: 중요한 채널/공간 정보를 강조하여 Head 입력을 정제합니다. CBAM의 MLP를 1D Conv(ECA)로 대체해 **연산 부담을 줄이면서 표현력을 유지**합니다.
-
-2) WFPN (Weighted Feature Pyramid Network): 기존 FPN의 단순 sum 대신 학습 가능한 가중치 결합을 통해, 스케일별 중요도를 학습하며 **정보 손실을 줄이고 정보 흐름**을 원활하게 합니다.
-
-3) SCM (Shuffle Context Module): 채널 수를 줄여 연산을 억제한 뒤, Shuffle을 통해 Context를 섞어 **효율적으로 표현을 강화**합니다.
-
-4) Deformable Convolution: offset 기반 소형/변형 얼굴에서도 안정적으로 특징을 포착해 **탐지 성능을 보완**합니다.
+### Customized Modules
+* **ECA-CBAM:** Integrates ECA into the CBAM structure by replacing the MLP in the Channel Attention module with a 1D Conv. It improves AP by **~0.38%** on WiderFace Hard with only a marginal **~0.16% increase in FLOPs** compared to standard ECA.
+* **WFPN (Weighted Feature Pyramid Network):** Replaces simple summation in FPN with learnable weighted combinations to prevent information loss. Integrated with Deformable Convolution Networks (DCN) to better detect distorted objects.
+* **SCM (Shuffle Context Module):** Reduces channels to suppress computational cost and uses channel shuffling to efficiently enhance feature representations. Also integrated with DCN.
+* **Deformable Convolution:** Captures features robustly using offsets, significantly compensating for detection performance on small and deformed faces.
 
 --- 
 
-# RetinaFace vs ACWFace
+# RetinaFace vs Our Model
 
 ## RetinaFace Structure
-
-* Backbone ➞ FPN  ➞ Detection Head
+* Backbone ➞ FPN ➞ Detection Head
 
 ![image](./assets/retinaface_structure.png)
 
-## Our model Structure
-
+## Our Model Structure
 * Backbone ➞ ECA-CBAM ➞ WFPN ➞ ECA-CBAM ➞ SCM ➞ ECA-CBAM ➞ SCM ➞ ECA-CBAM ➞ Detection Head
 
 ![image](./assets/our_model_structure.png)
 
 ---
 
-# Result
+# Results
 
 ## Ablation Study
 
 ![image](./assets/ablation_study.png)
 
-* WiderFace Dataset의 Hard Case에서 약 2.7% AP 향상.
-* Hard Case는 가려짐과 매우 소형 객체가 많으므로 이는 상당한 성능 개선으로 해석됨.
+* **FLOPs reduced by 2.6%** compared to the baseline RetinaFace (based on 640 x 640 image input).
+* **AP improved by 1.19% (Easy), 1.59% (Medium), and 3.07% (Hard)** on the WiderFace dataset.
+
+## Attention Ablation Study
+
+![image](./assets/attention_ablation_study.png)
+
+* ECA-CBAM outperforms ECA and CBAM by **0.38% and 0.39% AP**, respectively, on WiderFace Hard.
+* While ECA is sufficient for relatively easy cases, the spatial attention in ECA-CBAM proves highly effective for detecting small or occluded faces.
+* Achieves performance gains while maintaining FLOPs and parameter counts nearly identical to ECA.
 
 ## Visualization
 
@@ -70,18 +73,17 @@ ps: wider_val.txt only include val file names but not label information.
 
 ## Training
 We provide restnet50 and mobilenet0.25 as backbone network to train model.
-We trained Mobilenet0.25 on imagenet dataset and get 46.58%  in top 1. If you do not wish to train the model, we also provide trained model. Pretrain model  and trained model are put in [google cloud](https://drive.google.com/open?id=1oZRSG0ZegbVkVwUd8wUIQx8W7yfZ_ki1) Password: fstq . The model could be put as follows:
+We trained Mobilenet0.25 on imagenet dataset and get 46.58%  in top 1. If you do not wish to train the model, we also provide trained model. Pretrain model  and trained model are put in [google cloud](https://drive.google.com/drive/folders/12iCRdAreBJeNPZSqD0C-dXfNZ5R4m6RD?usp=sharing). The model could be put as follows:
 ```Shell
   ./weights/
       mobilenet0.25_Final.pth
       mobilenetV1X0.25_pretrain.tar
-      Resnet50_Final.pth
 ```
 1. Before training, you can check network configuration (e.g. batch_size, min_sizes and steps etc..) in ``src/utils/config.py``.
 
 2. Train the model using WIDER FACE:
   ```Shell
-  CUDA_VISIBLE_DEVICES=0,1,2,3 python tools/train.py --network resnet50
+  CUDA_VISIBLE_DEVICES=0,1,2,3 python tools/train.py --network mobile0.25
   # or
   CUDA_VISIBLE_DEVICES=0 python tools/train.py --network mobile0.25
   ```
@@ -91,7 +93,7 @@ We trained Mobilenet0.25 on imagenet dataset and get 46.58%  in top 1. If you do
 ### Evaluation widerface val
 1. Generate txt file
 ```Shell
-python tools/test_widerface.py --trained_model weight_file --network mobile0.25 or resnet50
+python tools/test_widerface.py --trained_model weight_file --network mobile0.25
 ```
 2. Evaluate txt results. Demo come from [Here](https://github.com/wondervictor/WiderFace-Evaluation)
 ```Shell
@@ -109,7 +111,7 @@ python evaluation.py
 
 2. Evaluate the trained model using:
 ```Shell
-python tools/test_fddb.py --trained_model weight_file --network mobile0.25 or resnet50
+python tools/test_fddb.py --trained_model weight_file --network mobile0.25
 ```
 
 
@@ -118,5 +120,5 @@ python tools/test_fddb.py --trained_model weight_file --network mobile0.25 or re
 * RetinaFace Paper: [https://arxiv.org/abs/1905.00641](https://arxiv.org/abs/1905.00641)
 * RetinaFace Code: [https://github.com/biubug6/Pytorch\_Retinaface](https://github.com/biubug6/Pytorch_Retinaface)
 * FDLite Paper: [https://arxiv.org/abs/2406.19107](https://arxiv.org/abs/2406.19107)
-* Light-Weight RetinaNet for Object Detection Paper: Private.
+* Light-Weight RetinaNet for Object Detection Paper: [https://arxiv.org/abs/1905.10011](https://arxiv.org/abs/1905.10011)
 * ACWFace Paper: [https://www.spiedigitallibrary.org/journals/journal-of-electronic-imaging/volume-31/issue-1/013012/ACWFace-efficient-and-lightweight-face-detector-based-on-RetinaFace/10.1117/1.JEI.31.1.013012.short](https://www.spiedigitallibrary.org/journals/journal-of-electronic-imaging/volume-31/issue-1/013012/ACWFace-efficient-and-lightweight-face-detector-based-on-RetinaFace/10.1117/1.JEI.31.1.013012.short)
