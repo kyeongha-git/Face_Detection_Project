@@ -34,24 +34,12 @@ parser.add_argument('--weight_decay', default=5e-4, type=float, help='Weight dec
 parser.add_argument('--gamma', default=0.1, type=float, help='Gamma update for SGD')
 parser.add_argument('--save_folder', default='./weights/', help='Location to save checkpoint models')
 
+
 args = parser.parse_args()
 
 if not os.path.exists(args.save_folder):
     os.mkdir(args.save_folder)
 
-def calculate_flops(net):
-    dummy_input = torch.randn(1, 3, img_dim, img_dim)
-
-    macs, params = profile(net, inputs=(dummy_input,))
-    macs, params = clever_format([macs, params], "%.3f")
-    
-    print('=====================================')
-    print(f'Model Architecture FLOPs & Params')
-    print(f'Input Resolution: 3 x {img_dim} x {img_dim}')
-    print(f'Computational complexity (MACs): {macs}')
-    print(f'Number of parameters: {params}')
-    print('=====================================')
-    return macs, params
 
 
 cfg = None
@@ -77,11 +65,11 @@ training_dataset = args.training_dataset
 save_folder = args.save_folder
 
 net = OurModel(cfg=cfg)
-print("Printing net...")
+print(f"Printing net...")
 print(net)
 
 # Calculate FLOPs and Params  
-calculate_flops(net)
+# (Removed: Use tools/calculate_flops.py instead)
 
 if args.resume_net is not None:
     print('Loading resume network...')
@@ -132,7 +120,7 @@ def train():
             batch_iterator = iter(data.DataLoader(dataset, batch_size, shuffle=True, num_workers=num_workers, collate_fn=detection_collate))
 
             if (epoch % 10 == 0 and epoch > 0) or (epoch % 5 == 0 and epoch > cfg['decay1']):
-                torch.save(net.state_dict(), save_folder + cfg['name']+ '_epoch_' + str(epoch) + '.pth')
+                torch.save(net.state_dict(), save_folder + cfg['name'] + '_epoch_' + str(epoch) + '.pth')
             epoch += 1
 
         load_t0 = time.time()

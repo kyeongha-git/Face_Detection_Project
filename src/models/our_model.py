@@ -18,7 +18,6 @@ class ClassHead(nn.Module):
     def forward(self,x):
         out = self.conv1x1(x)
         out = out.permute(0,2,3,1).contiguous()
-        
         return out.view(out.shape[0], -1, 2)
 
 class BboxHead(nn.Module):
@@ -29,7 +28,6 @@ class BboxHead(nn.Module):
     def forward(self,x):
         out = self.conv1x1(x)
         out = out.permute(0,2,3,1).contiguous()
-
         return out.view(out.shape[0], -1, 4)
 
 class LandmarkHead(nn.Module):
@@ -40,28 +38,28 @@ class LandmarkHead(nn.Module):
     def forward(self,x):
         out = self.conv1x1(x)
         out = out.permute(0,2,3,1).contiguous()
-
         return out.view(out.shape[0], -1, 10)
 
+
 class OurModel(nn.Module):
-    def __init__(self, cfg = None, phase = 'train'):
+    def __init__(self, cfg=None, phase='train'):
         """
         :param cfg:  Network related settings.
         :param phase: train or test.
         """
         super(OurModel,self).__init__()
         self.phase = phase
+        
         backbone = None
         if cfg['name'] == 'mobilenet0.25':
             backbone = MobileNetV1()
             if cfg['pretrain']:
-                checkpoint = torch.load("./weights/mobilenetV1X0.25_pretrain", map_location=torch.device('cpu'))
+                checkpoint = torch.load("./weights/mobilenetV1X0.25_pretrain.tar", map_location=torch.device('cpu'))
                 from collections import OrderedDict
                 new_state_dict = OrderedDict()
                 for k, v in checkpoint['state_dict'].items():
-                    name = k[7:]  # remove module.
+                    name = k[7:]
                     new_state_dict[name] = v
-                # load params
                 backbone.load_state_dict(new_state_dict)
         elif cfg['name'] == 'Resnet50':
             import torchvision.models as models
@@ -75,12 +73,21 @@ class OurModel(nn.Module):
             in_channels_stage2 * 8,
         ]
         out_channels = cfg['out_channel']
-        
-        self.edam_backbone = nn.ModuleList([ECA_CBAM(channels) for channels in in_channels_list])
+
+        # Attention: backbone output
+        self.attn_backbone = nn.ModuleList([ECA_CBAM(channel=ch) for ch in in_channels_list])
+
+        # FPN variant
         self.wfpn = WFPN(in_channels_list, out_channels)
-        self.edam_wfpn = nn.ModuleList([ECA_CBAM(out_channels) for _ in range(3)])
-        self.scm = nn.ModuleList([SCM(out_channels, out_channels) for _ in range(3)])
-        self.edam_scm = nn.ModuleList([ECA_CBAM(out_channels) for _ in range(3)])
+
+        # Attention: WFPN output
+        self.attn_wfpn = nn.ModuleList([ECA_CBAM(channel=out_channels) for _ in range(3)])
+
+        # Context module
+        self.context = nn.ModuleList([SCM(out_channels, out_channels) for _ in range(3)])
+
+        # Attention: context output
+        self.attn_context = nn.ModuleList([ECA_CBAM(channel=out_channels) for _ in range(3)])
 
         self.class_head = self._make_class_head(fpn_num=3, inchannels=cfg['out_channel'])
         self.bbox_head = self._make_bbox_head(fpn_num=3, inchannels=cfg['out_channel'])
@@ -107,11 +114,12 @@ class OurModel(nn.Module):
     def forward(self,inputs):
         backbone_out = self.body(inputs)
         outputs = list(backbone_out.values())
-        edam_out = [edam(outputs[idx]) for idx, edam in enumerate(self.edam_backbone)]
-        wfpn_out = self.wfpn(edam_out)
-        edam_out = [edam(wfpn_out[idx]) for idx, edam in enumerate(self.edam_wfpn)]
-        scm_out = [self.scm[idx](edam_out[idx]) for idx in range(len(self.scm))]
-        features = [self.edam_scm[idx](scm_out[idx]) for idx in range(len(self.scm))]
+        
+        attn_out = [self.attn_backbone[i](outputs[i]) for i in range(len(outputs))]
+        wfpn_out = self.wfpn(attn_out)
+        attn_out = [self.attn_wfpn[i](wfpn_out[i]) for i in range(3)]
+        ctx_out = [self.context[i](attn_out[i]) for i in range(3)]
+        features = [self.attn_context[i](ctx_out[i]) for i in range(3)]
 
         bbox_regressions = torch.cat([self.bbox_head[i](feature) for i, feature in enumerate(features)], dim=1)
         classifications = torch.cat([self.class_head[i](feature) for i, feature in enumerate(features)],dim=1)

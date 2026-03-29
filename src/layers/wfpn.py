@@ -17,7 +17,8 @@ class WFPN(nn.Module):
         self.merge2 = conv_bn(out_channels, out_channels, leaky = leaky)
         self.alpha_conv1 = nn.Conv2d(out_channels, 1, kernel_size=1, stride=1)
         self.alpha_conv2 = nn.Conv2d(out_channels, 1, kernel_size=1, stride=1)
-        
+
+
     def forward(self, input):
         # names = list(input.keys())
         output1 = self.output1(input[0]) #input[0] = B_0, output1 = O_1

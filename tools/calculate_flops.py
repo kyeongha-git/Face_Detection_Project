@@ -1,85 +1,66 @@
-from __future__ import print_function
-import os
 import torch
-import torch.optim as optim
-import torch.backends.cudnn as cudnn
+import torch.nn as nn
+from thop import profile, clever_format
 import argparse
-import torch.utils.data as data
 import sys
 import os
+
+# Add project root to sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.data.wider_face import WiderFaceDetection, detection_collate
-from src.data.data_augment import preproc
-from src.utils.config import cfg_mnet, cfg_re50
-from src.loss.multibox_loss import MultiBoxLoss
-from src.utils.prior_box import PriorBox
-import time
-import datetime
-import math
-from thop import profile
-from thop import clever_format
 from src.models.our_model import OurModel
+from src.utils.config import cfg_mnet
+from src.layers.conv_block import DeformableConv2d
 
-parser = argparse.ArgumentParser(description='Retinaface Training')
-parser.add_argument('--training_dataset', default='./data/widerface/train/label.txt', help='Training dataset directory')
-parser.add_argument('--network', default='mobile0.25', help='Backbone network mobile0.25 or resnet50')
-parser.add_argument('--num_workers', default=4, type=int, help='Number of workers used in dataloading')
-parser.add_argument('--lr', '--learning-rate', default=1e-3, type=float, help='initial learning rate')
-parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
-parser.add_argument('--resume_net', default=None, help='resume net for retraining')
-parser.add_argument('--resume_epoch', default=0, type=int, help='resume iter for retraining')
-parser.add_argument('--weight_decay', default=5e-4, type=float, help='Weight decay for SGD')
-parser.add_argument('--gamma', default=0.1, type=float, help='Gamma update for SGD')
-parser.add_argument('--save_folder', default='./weights/', help='Location to save checkpoint models')
+# Custom hook for DeformableConv2d to include the core convolution FLOPs
+def count_deform_conv(m, x, y):
+    kernel_ops = m.regular_conv.weight.size()[2:].numel()
+    in_channels = m.regular_conv.in_channels
+    out_channels = m.regular_conv.out_channels
+    groups = m.regular_conv.groups
+    
+    h_out, w_out = y.shape[2:]
+    # MACs = H_out * W_out * C_out * (C_in / groups) * K * K
+    total_ops = h_out * w_out * out_channels * (in_channels // groups) * kernel_ops
+    
+    m.total_ops += torch.DoubleTensor([int(total_ops)])
 
-args = parser.parse_args()
+def main():
+    parser = argparse.ArgumentParser(description='Calculate Model FLOPs & Parameters')
+    parser.add_argument('--image_size', type=int, default=640, help='Input image size')
+    parser.add_argument('--attention_type', type=str, default='eca_cbam', 
+                        choices=['none', 'eca', 'cbam', 'eca_cbam'], help='Attention type (for our_model)')
+    args = parser.parse_args()
 
-if not os.path.exists(args.save_folder):
-    os.mkdir(args.save_folder)
-
-def calculate_flops(net):
-    dummy_input = torch.randn(1, 3, img_dim, img_dim)
-
-    macs, params = profile(net, inputs=(dummy_input,))
+    # Create model
+    # Note: OurModel in 'preivious' might not accept attention_type, so we handle it gracefully.
+    try:
+        model = OurModel(cfg=cfg_mnet, attention_type=args.attention_type)
+    except TypeError:
+        # If it doesn't accept attention_type, it's likely the 'preivious' version
+        model = OurModel(cfg=cfg_mnet)
+    
+    model.eval()
+    
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.to(device)
+    
+    input_size = args.image_size
+    dummy_input = torch.randn(1, 3, input_size, input_size).to(device)
+    
+    custom_ops = {DeformableConv2d: count_deform_conv}
+    
+    macs, params = profile(model, inputs=(dummy_input,), custom_ops=custom_ops, verbose=False)
     macs, params = clever_format([macs, params], "%.3f")
     
-    print('=====================================')
-    print(f'Model Architecture FLOPs & Params')
-    print(f'Input Resolution: 3 x {img_dim} x {img_dim}')
-    print(f'Computational complexity (MACs): {macs}')
-    print(f'Number of parameters: {params}')
-    print('=====================================')
-    return macs, params
-
-
-cfg = None
-if args.network == "mobile0.25":
-    cfg = cfg_mnet
-elif args.network == "resnet50":
-    cfg = cfg_re50
-
-rgb_mean = (104, 117, 123) # bgr order
-num_classes = 2
-img_dim = cfg['image_size']
-num_gpu = cfg['ngpu']
-batch_size = cfg['batch_size']
-max_epoch = cfg['epoch']
-gpu_train = cfg['gpu_train']
-
-num_workers = args.num_workers
-momentum = args.momentum
-weight_decay = args.weight_decay
-initial_lr = args.lr
-gamma = args.gamma
-training_dataset = args.training_dataset
-save_folder = args.save_folder
-
-net = OurModel(cfg=cfg)
-print("Printing net...")
-print(net)
-
+    attn_str = f" | Attention: {args.attention_type}" if hasattr(model, 'attention_type') else ""
+    
+    print('\n' + '='*50)
+    print(f' Model Architecture FLOPs & Params')
+    print(f' Input Resolution: 3 x {input_size} x {input_size}{attn_str}')
+    print(f' Computational complexity (MACs): {macs}')
+    print(f' Number of parameters: {params}')
+    print('='*50 + '\n')
 
 if __name__ == '__main__':
-    # Calculate FLOPs and Params  
-    calculate_flops(net)
+    main()

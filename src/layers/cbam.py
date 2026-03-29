@@ -8,17 +8,22 @@ class ChannelAttention(nn.Module):
         self.max_pool = nn.AdaptiveMaxPool2d(1)
            
         self.fc = nn.Sequential(
-            nn.Conv2d(in_planes, in_planes // ratio, 1, bias=False),
+            nn.Conv2d(in_planes, in_planes // ratio, 1, bias=False), # N X C/r X 1 X 1
             nn.ReLU(),
-            nn.Conv2d(in_planes // ratio, in_planes, 1, bias=False)
+            nn.Conv2d(in_planes // ratio, in_planes, 1, bias=False) # N X C X 1 X 1
         )
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
-        avg_out = self.fc(self.avg_pool(x))
-        max_out = self.fc(self.max_pool(x))
-        out = avg_out + max_out
-        return self.sigmoid(out)
+        avg_out = self.avg_pool(x) # N X C X 1 X 1
+        max_out = self.max_pool(x) # N X C X 1 X 1
+
+        fc_avg_out = self.fc(avg_out) # N X C X 1 X 1
+        fc_max_out = self.fc(max_out) # N X C X 1 X 1
+        
+        out = fc_avg_out + fc_max_out # N X C X 1 X 1
+        return self.sigmoid(out) # N X C X 1 X 1
+
 
 class SpatialAttention(nn.Module):
     def __init__(self, kernel_size=7):
@@ -31,11 +36,12 @@ class SpatialAttention(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
-        avg_out = torch.mean(x, dim=1, keepdim=True)
-        max_out, _ = torch.max(x, dim=1, keepdim=True)
-        x = torch.cat([avg_out, max_out], dim=1)
-        x = self.conv1(x)
-        return self.sigmoid(x)
+        avg_out = torch.mean(x, dim=1, keepdim=True) # N X 1 X H X W
+        max_out, _ = torch.max(x, dim=1, keepdim=True) # N X 1 X H X W
+        x = torch.cat([avg_out, max_out], dim=1) # N X 2 X H X W
+        x = self.conv1(x) # N X 1 X H X W
+        return self.sigmoid(x) # N X 1 X H X W 
+
 
 class CBAM(nn.Module):
     def __init__(self, in_planes, ratio=16, kernel_size=7):
@@ -44,6 +50,8 @@ class CBAM(nn.Module):
         self.sa = SpatialAttention(kernel_size)
 
     def forward(self, x):
+        residual = x
         out = x * self.ca(x)
         out = out * self.sa(out)
-        return out
+        return out + residual
+

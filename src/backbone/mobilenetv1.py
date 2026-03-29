@@ -1,11 +1,11 @@
 import torch.nn as nn
-from src.layers.conv_block import conv_bn, conv_dw
+from src.layers.conv_block import conv_bn_m, conv_dw
 
 class MobileNetV1(nn.Module):
     def __init__(self):
         super(MobileNetV1, self).__init__()
         self.stage1 = nn.Sequential(
-            conv_bn(3, 8, 2, leaky = 0.1),    # 3
+            conv_bn_m(3, 8, 2, leaky = 0.1),    # 3
             conv_dw(8, 16, 1),   # 7
             conv_dw(16, 32, 2),  # 11
             conv_dw(32, 32, 1),  # 19
@@ -21,11 +21,12 @@ class MobileNetV1(nn.Module):
             conv_dw(128, 128, 1), # 187 + 32 = 219
         )
         self.stage3 = nn.Sequential(
-            conv_dw(128, 256, 2), # 219 +3 2 = 241
+            conv_dw(128, 256, 2), # 219 + 32 = 241
             conv_dw(256, 256, 1), # 241 + 64 = 301
         )
         self.avg = nn.AdaptiveAvgPool2d((1,1))
         self.fc = nn.Linear(256, 1000)
+    
     def forward(self, x):
         x = self.stage1(x)
         x = self.stage2(x)

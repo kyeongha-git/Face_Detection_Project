@@ -20,27 +20,26 @@ class SCM(nn.Module):
         
         self.ecm_1 = conv_bn(out_channel//4, out_channel//4, stride=1, leaky = leaky)
         self.ecm_2 = conv_bn_no_relu(out_channel//4, out_channel//4, stride=1)
-        
+
         self.shuffle_conv = nn.Conv2d(out_channel, out_channel, kernel_size=3, stride=1, padding=1, groups=out_channel, bias=False)
-        
         self.shuffle_bn = nn.BatchNorm2d(out_channel)
 
     def forward(self, input):
-            conv3X3 = self.conv3X3(input)
+        conv3X3 = self.conv3X3(input)
+    
+        conv5X5_1 = self.conv5X5_1(input)
+        conv5X5 = self.conv5X5_2(conv5X5_1)
         
-            conv5X5_1 = self.conv5X5_1(input)
-            conv5X5 = self.conv5X5_2(conv5X5_1)
-            
-            conv7X7_2 = self.conv7X7_2(conv5X5_1)
-            conv7X7 = self.conv7x7_3(conv7X7_2)
+        conv7X7_2 = self.conv7X7_2(conv5X5_1)
+        conv7X7 = self.conv7x7_3(conv7X7_2)
+    
+        conv_ecm_1 = self.ecm_1(conv7X7_2)
+        conv_ecm_2 = self.ecm_2(conv_ecm_1)
+    
+        out = torch.cat([conv3X3, conv5X5, conv7X7, conv_ecm_2], dim=1)
         
-            conv_ecm_1 = self.ecm_1(conv7X7_2)
-            conv_ecm_2 = self.ecm_2(conv_ecm_1)
+        shuffle_out = self.shuffle_conv(out)
+        shuffle_out = self.shuffle_bn(shuffle_out)
         
-            out = torch.cat([conv3X3, conv5X5, conv7X7, conv_ecm_2], dim=1)
-            
-            shuffle_out = self.shuffle_conv(out)
-            shuffle_out = self.shuffle_bn(shuffle_out)
-            
-            out = F.relu(shuffle_out)
-            return out
+        out = F.relu(shuffle_out)
+        return out
