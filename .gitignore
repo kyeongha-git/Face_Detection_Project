@@ -208,3 +208,8 @@ coverage.xml
 
 # K8s secrets
 k8s/secret*.yaml
+
+# Private
+TODO.md
+TODO_AWS.md
+RESULTS.md
