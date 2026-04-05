@@ -1,0 +1,42 @@
+# Git
+.git/
+.gitignore.swp
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py[cod]
+
+# Logs & temp
+logs/
+temp/
+*.log
+
+# Unused assets
+visualization/
+assets/
+
+# Weights
+weights.zip
+weights/Resnet50_*.pth
+weights/mobilenet0.25_eca_cbam_epoch_*.pth
+weights/mobilenetV1X0.25_pretrain.tar
+
+# WiderFace evaluate build artifacts
+widerface_evaluate/build/
+widerface_evaluate/widerface_txt/
+widerface_evaluate/*.so
+widerface_evaluate/*.c
+
+# Data: volume mount
+data/
+
+# Results
+results/
+
+# Misc
+.nfs*
+.env
+.venv

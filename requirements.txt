@@ -1,0 +1,27 @@
+# Core Deep Learning & Vision
+torch==2.10.0
+torchvision==0.25.0
+opencv-python==4.13.0.92
+fvcore==0.1.5.post20221221
+thop==0.1.1.post2209072238
+yacs==0.1.8
+triton==3.6.0
+
+# Data & Math
+numpy
+scipy
+networkx==3.4.2
+
+# Visualization & Utilities
+matplotlib
+Pillow==12.1.1
+tqdm
+PyYAML==6.0.3
+
+# API Serving
+fastapi>=0.115.0
+uvicorn[standard]>=0.34.0
+python-multipart>=0.0.18
+
+# AWS Integration
+boto3>=1.38.0

@@ -1,0 +1,25 @@
+# Core Deep Learning & Vision
+# torch==2.10.0 and torchvision==0.25.0 are already included in the base image:
+#   pytorch/pytorch:2.10.0-cuda12.8-cudnn9-runtime
+opencv-python-headless==4.13.0.92
+fvcore==0.1.5.post20221221
+thop==0.1.1.post2209072238
+yacs==0.1.8
+# triton is excluded: not needed for the evaluation pipeline
+
+# Data & Math
+numpy
+scipy
+networkx==3.4.2
+
+# Visualization & Utilities
+matplotlib
+Pillow==12.1.1
+tqdm
+PyYAML==6.0.3
+
+# Build & Evaluation
+# Cython: required to build the bbox Cython extension in widerface_evaluate/
+Cython
+# IPython: imported in widerface_evaluate/evaluation.py
+IPython

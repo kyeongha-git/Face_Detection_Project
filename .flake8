@@ -1,0 +1,13 @@
+[flake8]
+ignore = E401, E402, E501, E731, F401, W391, F811, E721, F541
+exclude = 
+    .git,
+    __pycache__,
+    data,
+    widerface_evaluate,
+    previous,
+    eval,
+    logs,
+    weights
+max-line-length = 120
+max-complexity = 18

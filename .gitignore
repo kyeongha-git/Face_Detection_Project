@@ -174,3 +174,37 @@ src/layers/cbam.py
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+# ──────────────────────────────────────────────
+# Phase 1+ additions
+
+# IDE
+.vscode/
+.idea/
+
+# Docker
+docker-compose*.yml
+.docker/
+
+# AWS credentials
+.aws/
+*.pem
+*.key
+
+# Environment files
+.env.local
+.env.production
+.env.staging
+*.env
+
+# FastAPI app cache
+app/__pycache__/
+
+# pytest cache & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# K8s secrets
+k8s/secret*.yaml

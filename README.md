@@ -47,73 +47,151 @@ This project optimizes the [RetinaFace](https://github.com/biubug6/Pytorch_Retin
 
 ---
 
-# Installation
-## Clone and install
-1. git clone https://github.com/kyeongha-git/Face_Detection_Project
+# Quick Start with Docker (Recommended)
 
-2. Pytorch version 1.1.0+ and torchvision 0.3.0+ are needed.
+The easiest way to run evaluation is via the pre-built Docker image. No local Python environment setup is required.
 
-3. Codes are based on Python 3
+## Prerequisites
 
-##### Data
-1. Download Link: from [google cloud](https://drive.google.com/open?id=11UGV3nbVv1x9IC--_tK3Uxf7hA6rlbsS) Password: ruck
+- [Docker](https://docs.docker.com/get-docker/) installed
+- WiderFace validation dataset (see [Data](#data) section below)
+- *(Optional, for GPU)* [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) installed
 
-2. Organise the dataset directory as follows:
+## 1. Pull the Docker Image
 
-```Shell
-  ./data/widerface/
-    train/
-      images/
-      label.txt
-    val/
-      images/
-      wider_val.txt
+```shell
+docker pull kyeonghah/our-model-eval:latest
 ```
-ps: wider_val.txt only include val file names but not label information.
+
+## 2. Prepare the Dataset
+
+Download the WiderFace validation images from [Google Drive](https://drive.google.com/open?id=11UGV3nbVv1x9IC--_tK3Uxf7hA6rlbsS) (Password: `ruck`) and organize as follows:
+
+```
+/your/local/path/widerface/val/
+  images/
+    0--Parade/
+    1--Handshaking/
+    ...
+  wider_val.txt
+```
+
+> `wider_val.txt` lists val image filenames but does not contain label information.
+
+## 3. Run Evaluation
+
+**GPU mode** (recommended):
+```shell
+docker run --rm --gpus all \
+  -v /your/local/path/widerface/val:/app/data/widerface/val:ro \
+  kyeonghah/our-model-eval:latest evaluate
+```
+
+**CPU mode** (no GPU required):
+```shell
+docker run --rm \
+  -e USE_CPU=1 \
+  -v /your/local/path/widerface/val:/app/data/widerface/val:ro \
+  kyeonghah/our-model-eval:latest evaluate
+```
+
+The container runs a two-step pipeline automatically:
+1. **Inference** — runs `test_widerface.py` over all validation images and saves per-image txt results
+2. **AP Evaluation** — runs `evaluation.py` to compute Easy / Medium / Hard AP scores
+
+Expected output:
+```
+==================== Results ====================
+Easy   Val AP: 0.9039
+Medium Val AP: 0.8810
+Hard   Val AP: 0.7808
+=================================================
+```
+
+## Other Commands
+
+```shell
+# Open an interactive shell inside the container
+docker run --rm -it \
+  -v /your/local/path/widerface/val:/app/data/widerface/val:ro \
+  kyeonghah/our-model-eval:latest shell
+```
+
+---
+
+# Local Installation
+
+If you prefer to run without Docker, follow the steps below.
+
+## Clone and Install
+
+```shell
+git clone https://github.com/kyeongha-git/Face_Detection_Project
+cd Face_Detection_Project/our_model
+pip install -r requirements.txt
+```
+
+> Requires Python 3, PyTorch 2.x, and torchvision.
+
+## Data
+
+<a name="data"></a>
+
+Download the WiderFace dataset from [Google Drive](https://drive.google.com/open?id=11UGV3nbVv1x9IC--_tK3Uxf7hA6rlbsS) (Password: `ruck`) and organize as follows:
+
+```shell
+./data/widerface/
+  train/
+    images/
+    label.txt
+  val/
+    images/
+    wider_val.txt
+```
+
+> `wider_val.txt` lists val image filenames only and does not contain label information.
 
 ## Training
-We provide restnet50 and mobilenet0.25 as backbone network to train model.
-We trained Mobilenet0.25 on imagenet dataset and get 46.58%  in top 1. If you do not wish to train the model, we also provide trained model. Pretrain model  and trained model are put in [google cloud](https://drive.google.com/drive/folders/12iCRdAreBJeNPZSqD0C-dXfNZ5R4m6RD?usp=sharing). The model could be put as follows:
-```Shell
-  ./weights/
-      mobilenet0.25_Final.pth
-      mobilenetV1X0.25_pretrain.tar
+
+Pretrained MobileNetV1X0.25 (ImageNet top-1: 46.58%) and fully trained models are available on [Google Drive](https://drive.google.com/drive/folders/12iCRdAreBJeNPZSqD0C-dXfNZ5R4m6RD?usp=sharing). Place weights as follows:
+
+```shell
+./weights/
+    mobilenet0.25_Final.pth
+    mobilenetV1X0.25_pretrain.tar
+    Resnet50_Final.pth
 ```
-1. Before training, you can check network configuration (e.g. batch_size, min_sizes and steps etc..) in ``src/utils/config.py``.
 
-2. Train the model using WIDER FACE:
-  ```Shell
-  CUDA_VISIBLE_DEVICES=0,1,2,3 python tools/train.py --network mobile0.25
-  # or
-  CUDA_VISIBLE_DEVICES=0 python tools/train.py --network mobile0.25
-  ```
+1. Configure training settings in `src/utils/config.py` (e.g., `batch_size`, `min_sizes`, `steps`).
 
+2. Train the model on WiderFace:
+```shell
+CUDA_VISIBLE_DEVICES=0,1,2,3 python tools/train.py --network mobile0.25
+# or single GPU
+CUDA_VISIBLE_DEVICES=0 python tools/train.py --network mobile0.25
+```
 
 ## Evaluation
-### Evaluation widerface val
-1. Generate txt file
-```Shell
-python tools/test_widerface.py --trained_model weight_file --network mobile0.25
+
+### WiderFace Validation
+
+**Step 1** — Generate per-image result txt files:
+```shell
+python tools/test_widerface.py \
+  --trained_model ./weights/mobilenet0.25_Final.pth \
+  --network mobile0.25
 ```
-2. Evaluate txt results. Demo come from [Here](https://github.com/wondervictor/WiderFace-Evaluation)
-```Shell
+
+**Step 2** — Build the Cython bbox module and compute AP:
+```shell
 cd ./widerface_evaluate
 python setup.py build_ext --inplace
 python evaluation.py
 ```
-3. You can also use widerface official Matlab evaluate demo in [Here](http://mmlab.ie.cuhk.edu.hk/projects/WIDERFace/WiderFace_Results.html)
-### Evaluation FDDB
 
-1. Download the images [FDDB](https://drive.google.com/open?id=17t4WULUDgZgiSy5kpCax4aooyPaz3GQH) to:
-```Shell
-./data/FDDB/images/
-```
+You can also use the official WiderFace Matlab evaluation tool: [WiderFace Results](http://mmlab.ie.cuhk.edu.hk/projects/WIDERFace/WiderFace_Results.html)
 
-2. Evaluate the trained model using:
-```Shell
-python tools/test_fddb.py --trained_model weight_file --network mobile0.25
-```
-
+---
 
 # Reference
 

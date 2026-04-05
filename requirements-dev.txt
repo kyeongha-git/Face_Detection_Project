@@ -1,0 +1,13 @@
+# Testing
+pytest>=8.0.0
+pytest-cov>=6.0.0
+pytest-asyncio>=0.25.0
+httpx>=0.28.0          # TestClient dependency for FastAPI testing
+
+# Code Quality
+flake8>=7.0.0
+black>=24.0.0
+isort>=5.13.0
+
+# Type Checking (optional)
+mypy>=1.10.0
